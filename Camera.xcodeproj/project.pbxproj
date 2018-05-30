@@ -13,6 +13,7 @@
 		9F251ACB20BBDA0400A570AD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9F251ACA20BBDA0400A570AD /* Assets.xcassets */; };
 		9F251ACE20BBDA0400A570AD /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 9F251ACC20BBDA0400A570AD /* LaunchScreen.storyboard */; };
 		9F251AD120BBDA0400A570AD /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 9F251AD020BBDA0400A570AD /* main.m */; };
+		9F4754C620BE8A1B003CCE19 /* RecordVideoVC.m in Sources */ = {isa = PBXBuildFile; fileRef = 9F4754C520BE8A1B003CCE19 /* RecordVideoVC.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -26,6 +27,8 @@
 		9F251ACD20BBDA0400A570AD /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		9F251ACF20BBDA0400A570AD /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		9F251AD020BBDA0400A570AD /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		9F4754C420BE8A1B003CCE19 /* RecordVideoVC.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RecordVideoVC.h; sourceTree = "<group>"; };
+		9F4754C520BE8A1B003CCE19 /* RecordVideoVC.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RecordVideoVC.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,6 +65,8 @@
 				9F251AC220BBDA0400A570AD /* AppDelegate.m */,
 				9F251AC420BBDA0400A570AD /* ViewController.h */,
 				9F251AC520BBDA0400A570AD /* ViewController.m */,
+				9F4754C420BE8A1B003CCE19 /* RecordVideoVC.h */,
+				9F4754C520BE8A1B003CCE19 /* RecordVideoVC.m */,
 				9F251AC720BBDA0400A570AD /* Main.storyboard */,
 				9F251ACA20BBDA0400A570AD /* Assets.xcassets */,
 				9F251ACC20BBDA0400A570AD /* LaunchScreen.storyboard */,
@@ -143,6 +148,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				9F251AC620BBDA0400A570AD /* ViewController.m in Sources */,
+				9F4754C620BE8A1B003CCE19 /* RecordVideoVC.m in Sources */,
 				9F251AD120BBDA0400A570AD /* main.m in Sources */,
 				9F251AC320BBDA0400A570AD /* AppDelegate.m in Sources */,
 			);
