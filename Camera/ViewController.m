@@ -57,6 +57,9 @@
     [self resultIV];
     [self switchToPhotoButton];
     [self switchToVideoButton];
+    
+    
+    
 }
 
 #pragma mark systemMethods
