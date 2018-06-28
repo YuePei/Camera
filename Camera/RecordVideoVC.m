@@ -8,6 +8,8 @@
 
 #import "RecordVideoVC.h"
 #import <AVFoundation/AVFoundation.h>
+#import <Photos/Photos.h>
+
 
 #define SCREEN_SCALE [UIScreen mainScreen].scale
 #define SCREEN_HEIGHT CGRectGetHeight([UIScreen mainScreen].bounds)
@@ -33,27 +35,117 @@
 @property (nonatomic, strong)AVAssetWriterInput *writerInput;
 //videoURL
 @property (nonatomic, strong)NSURL *videoURL;
+//closeBtn
+@property (nonatomic, strong)UIButton *closeBtn;
 
 @end
 
 @implementation RecordVideoVC
+static int startOrStop = 1;
 //我们这里只做了后置摄像头的视频输入输出, 并没有做切换摄像头/音频的输入输出
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = [UIColor blackColor];
     [self takePhotoBtn];
+    [self closeBtn];
     self.captureDevice = [self getCaptureDeviceWithCameraPosition:AVCaptureDevicePositionBack];
     [self previewLayer];
-    [self.captureSession startRunning];
     
+    dispatch_sync(dispatch_queue_create("serialQueue", DISPATCH_QUEUE_SERIAL), ^{
+       [self.captureSession startRunning];
+    });
 }
 
+#pragma mark AVCaptureVideoDataOutputSampleBufferDelegate
+- (void)captureOutput:(AVCaptureOutput *)output didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection {
+    //当开始捕捉的时候, 这里就拿到了数据
+    if (output == self.videoOutput) {
+        CFRetain(sampleBuffer);
+        [self writeInSampleBuffer:sampleBuffer];
+        CFRelease(sampleBuffer);
+    }
+}
+
+//录制视频
+- (void)writeInSampleBuffer:(CMSampleBufferRef)sampleBuffer {
+    if (CMSampleBufferDataIsReady(sampleBuffer)) {
+        //准备好数据写入
+        NSLog(@"ready");
+        //从这里可以看出, AVAssetWrite是针对每一帧进行写入的
+        if (self.writer.status == AVAssetWriterStatusUnknown) {
+            CMTime startTime = CMSampleBufferGetPresentationTimeStamp(sampleBuffer);
+            [self.writer startWriting];
+            [self.writer startSessionAtSourceTime:startTime];
+        }
+        
+        if (self.writerInput.readyForMoreMediaData == YES) {
+            BOOL success = [self.writerInput appendSampleBuffer:sampleBuffer];
+            if (!success) {
+                [self.writer finishWritingWithCompletionHandler:^{
+                    NSLog(@"finished");
+                }];
+            }else {
+                NSLog(@"succeed!");
+            }
+        }
+    }
+}
 #pragma mark toolMethods
+- (void)closeThisPage {
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
 - (void)recordMovie {
-    AVCaptureConnection *connection = [self.videoOutput connectionWithMediaType:AVMediaTypeVideo];
-    NSString *wholeVideoName = [[self creatVideoName] stringByAppendingString:@".mp4"];
-    self.videoURL = [NSURL fileURLWithPath:[[self createVieoDirectory] stringByAppendingPathComponent:wholeVideoName]];
-    
+    if (startOrStop) {
+        //开始录制
+        AVCaptureConnection *connection = [self.videoOutput connectionWithMediaType:AVMediaTypeVideo];
+        //判断是否支持videoOrientation属性
+        if ([connection isVideoOrientationSupported]) {
+            connection.videoOrientation = AVCaptureVideoOrientationPortrait;
+        }
+        //判断是否支持视频稳定, 可以显著提高视频质量
+        if ([connection isVideoStabilizationSupported]) {
+            [connection setPreferredVideoStabilizationMode:AVCaptureVideoStabilizationModeCinematic];
+        }
+        //摄像头进行平滑对焦模式
+        if (self.captureDevice.isSmoothAutoFocusEnabled) {
+            NSError *error = nil;
+            if ([self.captureDevice lockForConfiguration:&error]) {
+                [self.captureDevice setSmoothAutoFocusEnabled:YES];
+                [self.captureDevice unlockForConfiguration];
+            }else {
+                //
+            }
+        }
+        NSString *wholeVideoName = [[self creatVideoName] stringByAppendingString:@".mp4"];
+        self.videoURL = [NSURL fileURLWithPath:[[self createVieoDirectory] stringByAppendingPathComponent:wholeVideoName]];
+        NSError *error = nil;
+        _writer = [AVAssetWriter assetWriterWithURL:self.videoURL fileType:AVFileTypeMPEG4 error:&error];
+        if (!error) {
+            //创建AVAssetWriter成功
+            if ([self.writer canAddInput:self.writerInput]) {
+                [self.writer addInput:self.writerInput];
+            }
+            NSLog(@"开始写入");
+            startOrStop = 0;
+        }
+    }else {
+        //停止录制
+        [self.writer finishWritingWithCompletionHandler:^{
+            NSLog(@"停止写入");
+            [self saveToAlbum];
+        }];
+        startOrStop = 1;
+    }
+}
+
+//保存到相册
+- (void)saveToAlbum {
+    [[PHPhotoLibrary sharedPhotoLibrary] performChanges:^{
+        [PHAssetChangeRequest creationRequestForAssetFromVideoAtFileURL:self.videoURL];
+    } completionHandler:^(BOOL success, NSError * _Nullable error) {
+        NSLog(@"保存成功");
+    }];
 }
 
 //根据摄像头的位置获取到摄像头设备
@@ -67,10 +159,12 @@
     return nil;
 }
 
+//隐藏状态栏
 - (BOOL)prefersStatusBarHidden {
     return  YES;
 }
 
+#pragma mark 为每个视频拼接不同的文件路径
 - (NSString *)createVieoDirectory {
     NSFileManager *fileManager = [NSFileManager defaultManager];
     NSString *documentPath = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
@@ -92,26 +186,11 @@
 
 - (NSString *)creatVideoName {
     NSDateFormatter *formatter = [[NSDateFormatter alloc]init];
-    [formatter setDateFormat:@"YYYY_MM_dd_HH_mm_ss_zzz"];
+    [formatter setDateFormat:@"YYYY_MM_dd_HH_mm_ss"];
     NSString *dateString = [formatter stringFromDate:[NSDate date]];
     return dateString;
 }
-#pragma mark AVCaptureVideoDataOutputSampleBufferDelegate
 
-- (void)captureOutput:(AVCaptureOutput *)output didOutputSampleBuffer:(CMSampleBufferRef)sampleBuffer fromConnection:(AVCaptureConnection *)connection {
-    //当视频开始录制的时候, 这里就拿到了数据
-    [self.writer startWriting];
-    if (output == self.videoOutput) {
-        if (self.writerInput.readyForMoreMediaData) {
-            BOOL success = [self.writerInput appendSampleBuffer:sampleBuffer];
-            if (!success) {
-                [self.writer finishWritingWithCompletionHandler:^{
-                    NSLog(@"failed");
-                }];
-            }
-        }
-    }
-}
 #pragma mark lazy
 - (UIButton *)takePhotoBtn {
     if (!_takePhotoBtn) {
@@ -146,6 +225,7 @@
     return _deviceInput;
 }
 
+
 - (AVCaptureVideoDataOutput *)videoOutput {
     if (!_videoOutput) {
         _videoOutput = [[AVCaptureVideoDataOutput alloc]init];
@@ -166,20 +246,39 @@
     return _previewLayer;
 }
 
-- (AVAssetWriter *)writer {
-    if (!_writer) {
-        _writer = [[AVAssetWriter alloc]initWithURL:self.videoURL fileType:AVFileTypeMPEG4 error:nil];
-        if ([_writer canAddInput:self.writerInput]) {
-            [_writer addInput:self.writerInput];
-        }
-    }
-    return _writer;
-}
+//- (AVAssetWriter *)writer {
+//    if (!_writer) {
+//        _writer = [[AVAssetWriter alloc]initWithURL:self.videoURL fileType:AVFileTypeMPEG4 error:nil];
+//        if ([_writer canAddInput:self.writerInput]) {
+//            [_writer addInput:self.writerInput];
+//        }
+//    }
+//    return _writer;
+//}
 
 - (AVAssetWriterInput *)writerInput {
     if (!_writerInput) {
-        _writerInput = [[AVAssetWriterInput alloc]initWithMediaType:AVMediaTypeVideo outputSettings:nil];
+        //录制视频的一些配置，分辨率，编码方式等等
+        NSDictionary* settings = [NSDictionary dictionaryWithObjectsAndKeys:
+                                  AVVideoCodecH264, AVVideoCodecKey,
+                                  [NSNumber numberWithInteger: SCREEN_WIDTH * 2], AVVideoWidthKey,
+                                  [NSNumber numberWithInteger: SCREEN_HEIGHT * 2], AVVideoHeightKey,
+                                  nil];
+        _writerInput = [[AVAssetWriterInput alloc]initWithMediaType:AVMediaTypeVideo outputSettings:settings];
+        //必须要写
+        _writerInput.expectsMediaDataInRealTime = YES;
     }
     return _writerInput;
+}
+
+- (UIButton *)closeBtn {
+    if (!_closeBtn) {
+        _closeBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+        [_closeBtn setBackgroundImage:[UIImage imageNamed:@"close-o"] forState:UIControlStateNormal];
+        [self.view addSubview:_closeBtn];
+        [_closeBtn setFrame:CGRectMake(20, 20 , 24, 24)];
+        [_closeBtn addTarget:self action:@selector(closeThisPage) forControlEvents:UIControlEventTouchUpInside];
+    }
+    return _closeBtn;
 }
 @end

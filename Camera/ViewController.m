@@ -136,22 +136,12 @@
 //切换拍照和录制视频
 - (void)switchToTakePhoto {
     
-    
-    
 }
 
 - (void)switchToRecordVideo {
-//    if (!_metaOutput) {
-//        _metaOutput = [[AVCaptureMetadataOutput alloc]init];
-//    }
-//    [self.captureSession beginConfiguration];
-//    [self.captureSession removeOutput:self.imageOutput];
-//    [self.captureSession addOutput:_metaOutput];
-//    AVCaptureConnection *con = [_metaOutput connectionWithMediaType:AVMediaTypeVideo];
-//    [self.captureSession commitConfiguration];
-
     [self presentViewController:[RecordVideoVC new] animated:YES completion:nil];
 }
+
 #pragma mark lazy
 //根据摄像头的位置获取摄像头
 - (AVCaptureDevice *)getCaptureDeviceWithCameraPosition:(AVCaptureDevicePosition)position {
