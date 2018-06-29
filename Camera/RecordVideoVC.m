@@ -9,6 +9,7 @@
 #import "RecordVideoVC.h"
 #import <AVFoundation/AVFoundation.h>
 #import <Photos/Photos.h>
+#import <AssetsLibrary/AssetsLibrary.h>
 
 
 #define SCREEN_SCALE [UIScreen mainScreen].scale
@@ -37,12 +38,15 @@
 @property (nonatomic, strong)NSURL *videoURL;
 //closeBtn
 @property (nonatomic, strong)UIButton *closeBtn;
+//view
+@property (nonatomic, strong)UIView *view1;
 
 @end
 
+
 @implementation RecordVideoVC
 static int startOrStop = 1;
-//我们这里只做了后置摄像头的视频输入输出, 并没有做切换摄像头/音频的输入输出
+//这里只做了后置摄像头的视频输入输出, 并没有做切换摄像头/音频的输入输出
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = [UIColor blackColor];
@@ -50,10 +54,25 @@ static int startOrStop = 1;
     [self closeBtn];
     self.captureDevice = [self getCaptureDeviceWithCameraPosition:AVCaptureDevicePositionBack];
     [self previewLayer];
+    [self startCaptureDate];
     
-    dispatch_sync(dispatch_queue_create("serialQueue", DISPATCH_QUEUE_SERIAL), ^{
-       [self.captureSession startRunning];
-    });
+}
+
+//开始捕获数据
+- (void)startCaptureDate {
+    AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
+    if (status == AVAuthorizationStatusAuthorized) {
+        dispatch_sync(dispatch_queue_create("serialQueue", DISPATCH_QUEUE_SERIAL), ^{
+            [self.captureSession startRunning];
+        });
+    }else {
+        UIAlertController *authorizationAlert = [UIAlertController alertControllerWithTitle:nil message:@"请您设置允许APP访问您的相机->设置->隐私->相机" preferredStyle:UIAlertControllerStyleAlert];
+        UIAlertAction *action = [UIAlertAction actionWithTitle:@"好的" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            
+        }];
+        [authorizationAlert addAction:action];
+        [self presentViewController:authorizationAlert animated:YES completion:nil];
+    }
 }
 
 #pragma mark AVCaptureVideoDataOutputSampleBufferDelegate
@@ -97,6 +116,10 @@ static int startOrStop = 1;
 
 - (void)recordMovie {
     if (startOrStop) {
+        [UIView animateWithDuration:1 animations:^{
+            [self.previewLayer setFrame:CGRectMake(0, 60, SCREEN_WIDTH, SCREEN_HEIGHT - 60)];
+            self.view1.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.3];
+        }];
         //开始录制
         AVCaptureConnection *connection = [self.videoOutput connectionWithMediaType:AVMediaTypeVideo];
         //判断是否支持videoOrientation属性
@@ -130,6 +153,9 @@ static int startOrStop = 1;
             startOrStop = 0;
         }
     }else {
+        [UIView animateWithDuration:1 animations:^{
+            [self.previewLayer setFrame:CGRectMake(0, 64, CGRectGetWidth([UIScreen mainScreen].bounds), CGRectGetHeight([UIScreen mainScreen].bounds) - 64 - CGRectGetHeight(self.takePhotoBtn.frame) - 50)];
+        }];
         //停止录制
         [self.writer finishWritingWithCompletionHandler:^{
             NSLog(@"停止写入");
@@ -146,6 +172,29 @@ static int startOrStop = 1;
     } completionHandler:^(BOOL success, NSError * _Nullable error) {
         NSLog(@"保存成功");
     }];
+}
+
+//获取视频第一帧的图片
+- (void)movieToImageHandler:(void (^)(UIImage *movieImage))handler {
+    
+    AVURLAsset *asset = [[AVURLAsset alloc] initWithURL:self.videoURL options:nil];
+    AVAssetImageGenerator *generator = [[AVAssetImageGenerator alloc] initWithAsset:asset];
+    generator.appliesPreferredTrackTransform = TRUE;
+    CMTime thumbTime = CMTimeMakeWithSeconds(0, 60);
+    generator.apertureMode = AVAssetImageGeneratorApertureModeEncodedPixels;
+    AVAssetImageGeneratorCompletionHandler generatorHandler =
+    ^(CMTime requestedTime, CGImageRef im, CMTime actualTime, AVAssetImageGeneratorResult result, NSError *error){
+        if (result == AVAssetImageGeneratorSucceeded) {
+            UIImage *thumbImg = [UIImage imageWithCGImage:im];
+            if (handler) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    handler(thumbImg);
+                });
+            }
+        }
+    };
+    [generator generateCGImagesAsynchronouslyForTimes:
+     [NSArray arrayWithObject:[NSValue valueWithCMTime:thumbTime]] completionHandler:generatorHandler];
 }
 
 //根据摄像头的位置获取到摄像头设备
@@ -199,7 +248,8 @@ static int startOrStop = 1;
         [_takePhotoBtn setCenter:CGPointMake([UIScreen mainScreen].bounds.size.width / 2.0, CGRectGetHeight([UIScreen mainScreen].bounds) - CGRectGetHeight(_takePhotoBtn.frame) / 2.0 - 10)];
         [_takePhotoBtn setBackgroundImage:[UIImage imageNamed:@"photograph"] forState:UIControlStateNormal];
         [_takePhotoBtn setBackgroundImage:[UIImage imageNamed:@"photograph_Select"] forState:UIControlStateSelected];
-        [self.view addSubview:_takePhotoBtn];
+//        [self.view addSubview:_takePhotoBtn];
+        [self.view insertSubview:_takePhotoBtn aboveSubview:self.view1];
         [_takePhotoBtn addTarget:self action:@selector(recordMovie) forControlEvents:UIControlEventTouchUpInside];
     }
     return _takePhotoBtn;
@@ -225,7 +275,6 @@ static int startOrStop = 1;
     return _deviceInput;
 }
 
-
 - (AVCaptureVideoDataOutput *)videoOutput {
     if (!_videoOutput) {
         _videoOutput = [[AVCaptureVideoDataOutput alloc]init];
@@ -238,23 +287,13 @@ static int startOrStop = 1;
 - (AVCaptureVideoPreviewLayer *)previewLayer {
     if (!_previewLayer) {
         _previewLayer = [[AVCaptureVideoPreviewLayer alloc]initWithSession:self.captureSession];
-        [_previewLayer setFrame:CGRectMake(0, 64, CGRectGetWidth([UIScreen mainScreen].bounds), CGRectGetHeight([UIScreen mainScreen].bounds) - 64 - CGRectGetHeight(self.takePhotoBtn.frame) - 50)];
-        [self.view.layer addSublayer:_previewLayer];
+        [_previewLayer setFrame:CGRectMake(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT)];
+        [self.view1.layer addSublayer:_previewLayer];
         
         _previewLayer.videoGravity = AVLayerVideoGravityResizeAspectFill;
     }
     return _previewLayer;
 }
-
-//- (AVAssetWriter *)writer {
-//    if (!_writer) {
-//        _writer = [[AVAssetWriter alloc]initWithURL:self.videoURL fileType:AVFileTypeMPEG4 error:nil];
-//        if ([_writer canAddInput:self.writerInput]) {
-//            [_writer addInput:self.writerInput];
-//        }
-//    }
-//    return _writer;
-//}
 
 - (AVAssetWriterInput *)writerInput {
     if (!_writerInput) {
@@ -275,10 +314,21 @@ static int startOrStop = 1;
     if (!_closeBtn) {
         _closeBtn = [UIButton buttonWithType:UIButtonTypeCustom];
         [_closeBtn setBackgroundImage:[UIImage imageNamed:@"close-o"] forState:UIControlStateNormal];
-        [self.view addSubview:_closeBtn];
+
+        [self.view insertSubview:_closeBtn aboveSubview:self.view1];
         [_closeBtn setFrame:CGRectMake(20, 20 , 24, 24)];
         [_closeBtn addTarget:self action:@selector(closeThisPage) forControlEvents:UIControlEventTouchUpInside];
     }
     return _closeBtn;
 }
+
+- (UIView *)view1 {
+    if (!_view1) {
+        _view1 = [[UIView alloc]initWithFrame:self.view.frame];
+        _view1.backgroundColor = [UIColor blackColor];
+        [self.view addSubview:_view1];
+    }
+    return _view1;
+}
+
 @end

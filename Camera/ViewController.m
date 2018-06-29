@@ -58,8 +58,10 @@
     [self switchToPhotoButton];
     [self switchToVideoButton];
     
-    
-    
+}
+
+- (void)dealloc {
+    [self.captureSession stopRunning];
 }
 
 #pragma mark systemMethods
@@ -139,7 +141,8 @@
 }
 
 - (void)switchToRecordVideo {
-    [self presentViewController:[RecordVideoVC new] animated:YES completion:nil];
+    RecordVideoVC *vc = [RecordVideoVC new];
+    [self presentViewController:vc animated:YES completion:nil];
 }
 
 #pragma mark lazy
